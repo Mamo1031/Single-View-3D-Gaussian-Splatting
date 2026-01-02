@@ -1,0 +1,27 @@
+[project]
+name = "gaussian-splatting"
+version = "0.1.0"
+description = "3D Gaussian Splatting implementation for generating 3D models from multiple images"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "diff-gaussian-rasterization @ git+https://github.com/graphdeco-inria/diff-gaussian-rasterization.git",
+    "plyfile>=0.7.4",
+    "opencv-python>=4.8.0",
+    "numpy>=1.24.0",
+    "tqdm>=4.66.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatchling.build]
+packages = ["src/gaussian_splatting"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv.extra-build-dependencies]
+diff-gaussian-rasterization = ["torch", "numpy"]
