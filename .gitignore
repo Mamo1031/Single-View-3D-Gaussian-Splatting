@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# uv
+.uv/
+uv.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Output directories (keep directory structure but ignore contents)
+output/*
+!output/.gitkeep
+colmap_output/
+training_output/
+*.ply
+*.pth
+
+# Input images (keep directory structure but ignore actual images)
+data/images/*
+!data/images/.gitkeep
+
+# COLMAP outputs
+database.db
+sparse/
+dense/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Package files
+*.deb
+*.rpm
+*.pkg
+
