@@ -68,28 +68,28 @@ class Trainer:
         self.max_radii2D = max_radii2D
 
         # Setup optimizer
-        self.optimizer = optim.Adam(
-            gaussian_model.get_parameters(),
-            lr=lr,
-            eps=1e-15
-        )
+        self.optimizer = optim.Adam(gaussian_model.get_parameters(), lr=lr, eps=1e-15)
 
         # Learning rate scheduler
         self.scheduler = optim.lr_scheduler.MultiStepLR(
             self.optimizer,
             milestones=[iterations // 2, iterations * 3 // 4],
-            gamma=0.33
+            gamma=0.33,
         )
 
         # Background color (white)
         self.bg_color = torch.tensor([1.0, 1.0, 1.0], dtype=torch.float32).cuda()
 
         # Pipeline settings (simplified)
-        self.pipe = type('obj', (object,), {
-            'convert_SHs_python': False,
-            'compute_cov3D_python': False,
-            'debug': False,
-        })()
+        self.pipe = type(
+            "obj",
+            (object,),
+            {
+                "convert_SHs_python": False,
+                "compute_cov3D_python": False,
+                "debug": False,
+            },
+        )()
 
     def compute_loss(
         self,
@@ -100,11 +100,28 @@ class Trainer:
 
         Args:
             rendered_image: Rendered image [C, H, W]
-            gt_image: Ground truth image [C, H, W]
+            gt_image: Ground truth image [C, H, W] or [H, W, C]
 
         Returns:
             (Total loss, loss detail dictionary)
         """
+        # Ensure both images have the same shape format (CHW)
+        # rendered_image should be [C, H, W]
+        # gt_image might be [H, W, C] or [C, H, W]
+        if gt_image.dim() == 3:
+            if (
+                gt_image.shape[0] != rendered_image.shape[0]
+                and gt_image.shape[2] == rendered_image.shape[0]
+            ):
+                # gt_image is [H, W, C], convert to [C, H, W]
+                gt_image = gt_image.permute(2, 0, 1)
+
+        # Ensure shapes match
+        if rendered_image.shape != gt_image.shape:
+            raise ValueError(
+                f"Shape mismatch: rendered_image {rendered_image.shape} vs gt_image {gt_image.shape}"
+            )
+
         # L1 loss
         l1_loss = torch.nn.functional.l1_loss(rendered_image, gt_image)
 
@@ -146,8 +163,25 @@ class Trainer:
         for img in self.images:
             if isinstance(img, np.ndarray):
                 img_tensor = torch.from_numpy(img).float().cuda()
-                if img_tensor.dim() == 3 and img_tensor.shape[2] == 3:
-                    img_tensor = img_tensor.permute(2, 0, 1)  # HWC -> CHW
+                # Ensure CHW format [C, H, W]
+                if img_tensor.dim() == 3:
+                    if img_tensor.shape[2] == 3:  # HWC format
+                        img_tensor = img_tensor.permute(2, 0, 1)  # HWC -> CHW
+                    elif (
+                        img_tensor.shape[0] == 3 and img_tensor.shape[2] != 3
+                    ):  # Already CHW
+                        pass  # Already in correct format
+                # Normalize to [0, 1] if values are in [0, 255]
+                if img_tensor.max() > 1.0:
+                    img_tensor = img_tensor / 255.0
+                gt_images.append(img_tensor)
+            elif isinstance(img, torch.Tensor):
+                # Ensure tensor is on correct device and in CHW format
+                img_tensor = img.float().cuda() if not img.is_cuda else img.float()
+                if img_tensor.dim() == 3:
+                    if img_tensor.shape[2] == 3:  # HWC format
+                        img_tensor = img_tensor.permute(2, 0, 1)  # HWC -> CHW
+                # Normalize to [0, 1] if values are in [0, 255]
                 if img_tensor.max() > 1.0:
                     img_tensor = img_tensor / 255.0
                 gt_images.append(img_tensor)
@@ -184,8 +218,10 @@ class Trainer:
             self.scheduler.step()
 
             # Densify and prune (at regular intervals)
-            if iteration % self.densification_interval == 0 and \
-               self.densify_from_iter <= iteration < self.densify_until_iter:
+            if (
+                iteration % self.densification_interval == 0
+                and self.densify_from_iter <= iteration < self.densify_until_iter
+            ):
                 # Simplified: densification implementation omitted
                 pass
 
@@ -201,7 +237,9 @@ class Trainer:
         # Save final results
         self.save_checkpoint(self.iterations)
         self.gaussian_model.save_ply(str(self.output_dir / "final_model.ply"))
-        print(f"Training completed. Model saved to {self.output_dir / 'final_model.ply'}")
+        print(
+            f"Training completed. Model saved to {self.output_dir / 'final_model.ply'}"
+        )
 
     def save_checkpoint(self, iteration: int):
         """Save checkpoint.
@@ -210,18 +248,21 @@ class Trainer:
             iteration: Iteration number
         """
         checkpoint_path = self.output_dir / f"checkpoint_{iteration}.pth"
-        torch.save({
-            'iteration': iteration,
-            'model_state_dict': {
-                'xyz': self.gaussian_model._xyz.state_dict(),
-                'features_dc': self.gaussian_model._features_dc.state_dict(),
-                'features_rest': self.gaussian_model._features_rest.state_dict(),
-                'opacity': self.gaussian_model._opacity.state_dict(),
-                'scaling': self.gaussian_model._scaling.state_dict(),
-                'rotation': self.gaussian_model._rotation.state_dict(),
+        torch.save(
+            {
+                "iteration": iteration,
+                "model_state_dict": {
+                    "xyz": self.gaussian_model._xyz.data,
+                    "features_dc": self.gaussian_model._features_dc.data,
+                    "features_rest": self.gaussian_model._features_rest.data,
+                    "opacity": self.gaussian_model._opacity.data,
+                    "scaling": self.gaussian_model._scaling.data,
+                    "rotation": self.gaussian_model._rotation.data,
+                },
+                "optimizer_state_dict": self.optimizer.state_dict(),
             },
-            'optimizer_state_dict': self.optimizer.state_dict(),
-        }, checkpoint_path)
+            checkpoint_path,
+        )
 
     def save_render(
         self,
@@ -243,7 +284,11 @@ class Trainer:
         rendered_np = np.clip(rendered_np, 0, 1)
         rendered_np = (rendered_np * 255).astype(np.uint8)
 
-        gt_np = gt_image.detach().cpu().permute(1, 2, 0).numpy() if gt_image.dim() == 3 else gt_image
+        gt_np = (
+            gt_image.detach().cpu().permute(1, 2, 0).numpy()
+            if gt_image.dim() == 3
+            else gt_image
+        )
         if gt_np.max() <= 1.0:
             gt_np = (gt_np * 255).astype(np.uint8)
 
@@ -253,4 +298,3 @@ class Trainer:
 
         cv2.imwrite(str(render_path), cv2.cvtColor(rendered_np, cv2.COLOR_RGB2BGR))
         cv2.imwrite(str(gt_path), cv2.cvtColor(gt_np, cv2.COLOR_RGB2BGR))
-
